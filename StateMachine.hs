@@ -110,7 +110,6 @@ instance ( MachineCombinator stm1
                                         Right (Right st2) -> f <$> toTriState Nothing
                                                                               (collect stm2 st2)
 
-
          merge (ParallelSt a) (ParallelSt b) = ParallelSt $ case a of 
                                                 (Left (x,y))     -> left (merge x *** merge y) 
                                                                   . right (left (merge x).right (merge y))
