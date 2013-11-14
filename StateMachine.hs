@@ -39,8 +39,8 @@ class MachineCombinator (stm :: * -> * ) where
     data State stm  :: * -> *
     type Input stm  :: * 
 
-    trigger  :: Input stm  -> stm output -> State stm output -> Maybe (State stm output)
-    collect  :: State stm output -> Maybe output
+    trigger  :: stm output    -> Input stm     -> State stm output -> Maybe (State stm output)
+    collect  :: stm output    -> State stm output -> Maybe output
     merge    :: State stm out -> State stm out -> State stm out
 
 
@@ -54,7 +54,7 @@ class MachineCombinator (stm :: * -> * ) where
 
 -- provisional laws:
 ------ trigger inn (st1 `merge` st2) == (trigger inn st1) `merge` (trigger inn st2) 
-
+------ collect st1 <|> collect st2   == collect (st1 `merge` st2)
 
 
 --------------------------------------------------------------------------------------
@@ -64,11 +64,11 @@ instance MachineCombinator (StepMachine input) where
                                         
     type Input (StepMachine input)          = input
     
-    trigger inn (StepMachine f) (StepSt b _)
+    trigger (StepMachine f) inn (StepSt b _)
              | b                            = Just$StepSt False (f inn)
              | otherwise                    = Nothing
 
-    collect (StepSt _ out)                  = out 
+    collect _ (StepSt _ out)                = out 
     merge  (StepSt b out) (StepSt b' out')  = StepSt (b||b') (out <|> out')
 
 data StepMachine input output = StepMachine (input -> Maybe output) -- TODO check spell 
@@ -77,45 +77,49 @@ data StepMachine input output = StepMachine (input -> Maybe output) -- TODO chec
 
 
 -----------------------------------------------------------------------------------------
---instance ( StateMachine stm1 
---         , StateMachine stm2
---         , Input stm1 ~ Input stm2 
---         ) => StateMachine (Parallel stm1 out1 stm2 out2) where
---         data State (Parallel stm1 out1 stm2 out2 ) out = ParallelSt (TriState (State stm1 out1) (State stm2 out2))  
---         type Input (Parallel stm1 out1 stm2 out2 )     = Input stm1
+instance ( MachineCombinator stm1 
+         , MachineCombinator stm2
+         , Input stm1 ~ Input stm2 
+         ) => MachineCombinator (ParallelMachine stm1 out1 stm2 out2) where
+         data State (ParallelMachine stm1 out1 stm2 out2 ) out = ParallelSt (TriState (State stm1 out1) 
+                                                                            (State stm2 out2))
+
+         type Input (ParallelMachine stm1 out1 stm2 out2 )     = Input stm1
          
---         trigger inn (Parallel f stm1 stm2) 
---                     (ParallelSt st) = case st of
 
---                                        Left  (st1,st2)   -> let (out1,st1') = trigger inn stm1 st1
---                                                                 (out2,st2') = trigger inn stm2 st2
-                                                              
---                                                              in ( f          <$> toTriState out1 out2
---                                                                 , ParallelSt <$> toTriState st1' st2'
---                                                                 )
+         trigger (Parallel _ stm1 stm2)
+                 inn (ParallelSt st)    =  case st of
 
---                                        Right (Left  st1) -> let (out1,st1') = trigger inn stm1 st1
-                                                              
---                                                              in ( f          <$> toTriState out1 Nothing
---                                                                 , ParallelSt <$> toTriState st1' Nothing
---                                                                 )
+                                        Left  (st1,st2)   -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
+                                                                                       (trigger stm2 inn st2)
 
---                                        Right (Right st2) -> let (out2,st2') = trigger inn stm2 st2
-                                                              
---                                                              in ( f          <$> toTriState Nothing out2
---                                                                 , ParallelSt <$> toTriState Nothing st2'
---                                                                 )
+                                        Right (Left  st1) -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
+                                                                                       Nothing
+
+                                        Right (Right st2) -> ParallelSt <$> toTriState Nothing
+                                                                                       (trigger stm2 inn st2)
+
+         collect (Parallel f stm1 stm2) 
+                 (ParallelSt st)        = case st of
+                                        Left  (st1,st2)   -> f <$> toTriState (collect stm1 st1) 
+                                                                              (collect stm2 st2)
+
+                                        Right (Left  st1) -> f <$> toTriState (collect stm1 st1) 
+                                                                              Nothing
+
+                                        Right (Right st2) -> f <$> toTriState Nothing
+                                                                              (collect stm2 st2)
 
 
---         merge (ParallelSt a) (ParallelSt b) = ParallelSt $ case a of 
---                                                (Left (x,y))     -> left (merge x *** merge y) 
---                                                                  . right (left (merge x).right (merge y))
---                                                                  $ b 
+         merge (ParallelSt a) (ParallelSt b) = ParallelSt $ case a of 
+                                                (Left (x,y))     -> left (merge x *** merge y) 
+                                                                  . right (left (merge x).right (merge y))
+                                                                  $ b 
 
---                                                (Right(Left  x)) -> right (left  (merge x)) $ b 
---                                                (Right(Right y)) -> right (right (merge y)) $ b
+                                                (Right(Left  x)) -> right (left  (merge x)) $ b 
+                                                (Right(Right y)) -> right (right (merge y)) $ b
 
---data Parallel stm1 out1 stm2 out2 output = Parallel (TriState out1 out2 -> output) (stm1 out1) (stm2 out2)
+data ParallelMachine stm1 out1 stm2 out2 output = Parallel (TriState out1 out2 -> output) (stm1 out1) (stm2 out2)
 -----------------------------------------------------------------------------------------
 
 
