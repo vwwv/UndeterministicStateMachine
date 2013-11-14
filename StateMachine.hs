@@ -33,15 +33,50 @@ import Prelude hiding ((.),id) -- we use those from Category...
 
 -- Represent an StateMachine  in a set of concurrent states of execution.
 -- it is feeded with value of type "input" and out values of type" output" when success.
+data StateMachine input output where
+  Wrap:: (MachineCombinator stm) => stm output -> State stm output -> StateMachine input output
 
-class MachineCombinator (stm :: * -> * ) where
+
+----TODO: Check the laws.....
+----TODO...
+--instance Functor     (CompleteMachine input) where
+--instance Applicative (CompleteMachine input) where
+--instance Alternative (CompleteMachine input) where
+--instance Category    CompleteMachine         where
+--instance Arrow       CompleteMachine         where
+--instance ArrowChoice CompleteMachine         where
+
+--elementSuch  cond
+--element  
+--filteringOut
+--filteringIn
+--elements 
+--separateBy 
+--enclosed  
+--anyone          
+--some 
+--many 
+--empty
+
+
+
+---------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------
+-- Combinators to define an State machine:
+
+-- provisional laws:
+------ trigger inn (st1 `merge` st2) == (trigger inn st1) `merge` (trigger inn st2) 
+------ collect st1 <|> collect st2   == collect (st1 `merge` st2)
+
+class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
     data State stm  :: * -> *
     type Input stm  :: * 
 
-    trigger  :: stm output    -> Input stm     -> State stm output -> Maybe (State stm output)
-    collect  :: stm output    -> State stm output -> Maybe output
-    merge    :: State stm out -> State stm out -> State stm out
+    trigger  :: stm output        -> Input stm     -> State stm output -> Maybe (State stm output)
+    start    :: stm output        -> State stm output
+    collect  :: State stm output  -> Maybe output  
+    merge    :: State stm out     -> State stm out -> State stm out
 
 
 --------------------------------------------------------------------------------------
@@ -52,9 +87,7 @@ class MachineCombinator (stm :: * -> * ) where
 -- such creating an specific more-eficient particular combination (ex: withLength x)....
 
 
--- provisional laws:
------- trigger inn (st1 `merge` st2) == (trigger inn st1) `merge` (trigger inn st2) 
------- collect st1 <|> collect st2   == collect (st1 `merge` st2)
+
 
 
 --------------------------------------------------------------------------------------
@@ -64,14 +97,16 @@ instance MachineCombinator (StepMachine input) where
                                         
     type Input (StepMachine input)          = input
     
-    trigger (StepMachine f) inn (StepSt b _)
+    trigger (Step _ f) inn (StepSt b _)
              | b                            = Just$StepSt False (f inn)
              | otherwise                    = Nothing
 
-    collect _ (StepSt _ out)                = out 
+    collect (StepSt _ out)                  = out 
     merge  (StepSt b out) (StepSt b' out')  = StepSt (b||b') (out <|> out')
+    start  (Step x _)                       = StepSt True x
 
-data StepMachine input output = StepMachine (input -> Maybe output) -- TODO check spell 
+data StepMachine input output = Step (Maybe output) (input -> Maybe output) -- TODO check spell 
+deriving instance Functor (StepMachine inn) 
 ---------------------------------------------------------------------------------------
 
 
@@ -80,14 +115,13 @@ data StepMachine input output = StepMachine (input -> Maybe output) -- TODO chec
 instance ( MachineCombinator stm1 
          , MachineCombinator stm2
          , Input stm1 ~ Input stm2 
-         ) => MachineCombinator (ParallelMachine stm1 out1 stm2 out2) where
-         data State (ParallelMachine stm1 out1 stm2 out2 ) out = ParallelSt (TriState (State stm1 out1) 
-                                                                            (State stm2 out2))
+         ) => MachineCombinator (ParallelMachine stm1 stm2) where
+         data State (ParallelMachine stm1 stm2) out = ParallelSt (TriState (State stm1 out) (State stm2 out))
 
-         type Input (ParallelMachine stm1 out1 stm2 out2 )     = Input stm1
+         type Input (ParallelMachine stm1 stm2)     = Input stm1
          
 
-         trigger (Parallel _ stm1 stm2)
+         trigger (Parallel stm1 stm2)
                  inn (ParallelSt st)    =  case st of
 
                                         Left  (st1,st2)   -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
@@ -99,16 +133,8 @@ instance ( MachineCombinator stm1
                                         Right (Right st2) -> ParallelSt <$> toTriState Nothing
                                                                                        (trigger stm2 inn st2)
 
-         collect (Parallel f stm1 stm2) 
-                 (ParallelSt st)        = case st of
-                                        Left  (st1,st2)   -> f <$> toTriState (collect stm1 st1) 
-                                                                              (collect stm2 st2)
-
-                                        Right (Left  st1) -> f <$> toTriState (collect stm1 st1) 
-                                                                              Nothing
-
-                                        Right (Right st2) -> f <$> toTriState Nothing
-                                                                              (collect stm2 st2)
+         collect (ParallelSt st)        = either (uncurry (<|>).(collect***collect))  (either collect collect)
+                                        $ st
 
          merge (ParallelSt a) (ParallelSt b) = ParallelSt $ case a of 
                                                 (Left (x,y))     -> left (merge x *** merge y) 
@@ -118,22 +144,28 @@ instance ( MachineCombinator stm1
                                                 (Right(Left  x)) -> right (left  (merge x)) $ b 
                                                 (Right(Right y)) -> right (right (merge y)) $ b
 
-data ParallelMachine stm1 out1 stm2 out2 output = Parallel (TriState out1 out2 -> output) (stm1 out1) (stm2 out2)
+         start (Parallel stm1 stm2) = ParallelSt (Left (start stm1,start stm2)) 
+
+
+data ParallelMachine stm1 stm2 out = Parallel (stm1 out) (stm2 out) 
+deriving instance (Functor stm1,Functor stm2 ) => Functor (ParallelMachine stm1 stm2)
 -----------------------------------------------------------------------------------------
 
 
 
 
 -----------------------------------------------------------------------------------------
---instance ( StateMachine stm1
---         , StateMachine stm2
+--instance ( MachineCombinator stm1
+--         , MachineCombinator stm2
 --         , Input stm1 ~ Input stm2
 --         , Monoid mid2
---         ) => StateMachine (Sequenced stm1 (mid1:: *) (mid2:: *) stm2) where
+--         ) => MachineCombinator (SequencedMachine stm1 mid1 mid2 stm2) where
 
---         data State (Sequenced stm1 mid1 mid2 stm2) out = SequencedSt (Maybe (State stm1 (mid1 -> mid2))) 
---                                                                      (Maybe (mid1 -> mid2)) 
---                                                                      (State stm2 mid1)
+       --  data State (Sequenced stm1 mid1 mid2 stm2) out = K
+                                                          --SequencedSt ( TriState  (State stm1 (mid1 -> mid2))
+                                                          --                        (State stm2 mid1)
+                                                          --            ) 
+                                                          --            (Maybe (mid1 -> mid2)) 
                                                                       
                                                                       
   
@@ -161,11 +193,12 @@ data ParallelMachine stm1 out1 stm2 out2 output = Parallel (TriState out1 out2 -
 
 --                                      mix f g x =  f x <> g x
 
---data Sequenced  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)) (mid2 -> output) (stm2 mid)
+data SequencedMachine  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)) (mid2 -> output) (stm2 mid)
 ---- TODO, merge a new fresh st2 to st2' every time (trigger inn stm1 st1) produce an output!!!!
 ---- Otherwise this machine is pointless.... 
 
----- data Sequenced  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)) (mid2 -> output) (State (stm2 mid)) (stm2 mid)
+--data SequencedMachine  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)) 
+--                                                             (mid2 -> output) (Maybe(State (stm2 mid))) (stm2 mid)
 
 -----------------------------------------------------------------------------------------
 
@@ -215,19 +248,11 @@ data ParallelMachine stm1 out1 stm2 out2 output = Parallel (TriState out1 out2 -
 
 
 ------------------------------------------------------------------------------------------
---data CompleteMachine input output where
---  Wrap:: (StateMachine stm) => stm output -> State stm output -> CompleteMachine input output
 
 
 
-----TODO: Check the laws.....
-----TODO...
---instance Functor     (CompleteMachine input) where
---instance Applicative (CompleteMachine input) where
---instance Alternative (CompleteMachine input) where
---instance Category    CompleteMachine         where
---instance Arrow       CompleteMachine         where
---instance ArrowChoice CompleteMachine         where
+
+
 ------------------------------------------------------------------------------------------
 
 
@@ -237,20 +262,9 @@ data ParallelMachine stm1 out1 stm2 out2 output = Parallel (TriState out1 out2 -
 
 -------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
----- Usefull functions to manage CompletMachine only based on its class instances
 
 
---elementSuch  cond
---element  
---filteringOut
---filteringIn
---elements 
---separateBy 
---enclosed  
---anyone          
---some 
---many 
---empty
+
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
 
