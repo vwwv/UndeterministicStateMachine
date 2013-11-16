@@ -28,13 +28,11 @@ import Prelude hiding ((.),id) -- we use those from Category...
 
 -}
 
--- TODO: laws...
-
 
 -- Represent an StateMachine  in a set of concurrent states of execution.
 -- it is feeded with value of type "input" and out values of type" output" when success.
 data StateMachine input output where
-  Wrap:: (MachineCombinator stm) => stm output -> State stm output -> StateMachine input output
+  Wrap:: (MachineCombinator stm) => stm output -> StateMachine input output
 
 
 ----TODO: Check the laws.....
@@ -70,13 +68,11 @@ data StateMachine input output where
 
 class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
-    data State stm  :: * -> *
     type Input stm  :: * 
 
-    trigger  :: stm output        -> Input stm     -> State stm output -> Maybe (State stm output)
-    start    :: stm output        -> State stm output
-    collect  :: State stm output  -> Maybe output  
-    merge    :: State stm out     -> State stm out -> State stm out
+    trigger  :: Input stm   -> stm output    -> Maybe (stm output)
+    collect  :: stm output  -> Maybe output  
+    merge    :: stm out     -> stm out -> stm out
 
 
 --------------------------------------------------------------------------------------
@@ -91,114 +87,114 @@ class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
 
 --------------------------------------------------------------------------------------
-instance MachineCombinator (StepMachine input) where
+--instance MachineCombinator (StepMachine input) where
     
-    data State (StepMachine input) out      = StepSt Bool (Maybe out)
+--    data State (StepMachine input) out      = StepSt Bool (Maybe out)
                                         
-    type Input (StepMachine input)          = input
+--    type Input (StepMachine input)          = input
     
-    trigger (Step _ f) inn (StepSt b _)
-             | b                            = Just$StepSt False (f inn)
-             | otherwise                    = Nothing
+--    trigger (Step _ f) inn (StepSt b _)
+--             | b                            = Just$StepSt False (f inn)
+--             | otherwise                    = Nothing
 
-    collect (StepSt _ out)                  = out 
-    merge  (StepSt b out) (StepSt b' out')  = StepSt (b||b') (out <|> out')
-    start  (Step x _)                       = StepSt True x
+--    collect (StepSt _ out)                  = out 
+--    merge  (StepSt b out) (StepSt b' out')  = StepSt (b||b') (out <|> out')
+--    start  (Step x _)                       = StepSt True x
 
-data StepMachine input output = Step (Maybe output) (input -> Maybe output) -- TODO check spell 
-deriving instance Functor (StepMachine inn) 
+--data StepMachine input output = Step (Maybe output) (input -> Maybe output) -- TODO check spell 
+--deriving instance Functor (StepMachine inn) 
 ---------------------------------------------------------------------------------------
 
 
 
 -----------------------------------------------------------------------------------------
-instance ( MachineCombinator stm1 
-         , MachineCombinator stm2
-         , Input stm1 ~ Input stm2 
-         ) => MachineCombinator (ParallelMachine stm1 stm2) where
-         data State (ParallelMachine stm1 stm2) out = ParallelSt (TriState (State stm1 out) (State stm2 out))
+--instance ( MachineCombinator stm1 
+--         , MachineCombinator stm2
+--         , Input stm1 ~ Input stm2 
+--         ) => MachineCombinator (ParallelMachine stm1 stm2) where
+--         data State (ParallelMachine stm1 stm2) out = ParallelSt (TriState (State stm1 out) (State stm2 out))
 
-         type Input (ParallelMachine stm1 stm2)     = Input stm1
-         
+--         type Input (ParallelMachine stm1 stm2)     = Input stm1
 
-         trigger (Parallel stm1 stm2)
-                 inn (ParallelSt st)    =  case st of
+--         trigger (Parallel stm1 stm2)
+--                 inn (ParallelSt st)    =  case st of
 
-                                        Left  (st1,st2)   -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
-                                                                                       (trigger stm2 inn st2)
+--                                        Left  (st1,st2)   -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
+--                                                                                       (trigger stm2 inn st2)
 
-                                        Right (Left  st1) -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
-                                                                                       Nothing
+--                                        Right (Left  st1) -> ParallelSt <$> toTriState (trigger stm1 inn st1) 
+--                                                                                       Nothing
 
-                                        Right (Right st2) -> ParallelSt <$> toTriState Nothing
-                                                                                       (trigger stm2 inn st2)
+--                                        Right (Right st2) -> ParallelSt <$> toTriState Nothing
+--                                                                                       (trigger stm2 inn st2)
 
-         collect (ParallelSt st)        = either (uncurry (<|>).(collect***collect))  (either collect collect)
-                                        $ st
+--         collect (ParallelSt st)        = either (uncurry (<|>).(collect***collect))  (either collect collect)
+--                                        $ st
 
-         merge (ParallelSt a) (ParallelSt b) = ParallelSt $ case a of 
-                                                (Left (x,y))     -> left (merge x *** merge y) 
-                                                                  . right (left (merge x).right (merge y))
-                                                                  $ b 
+--         merge (ParallelSt a) (ParallelSt b) = ParallelSt $ case a of 
+--                                                (Left (x,y))     -> left (merge x *** merge y) 
+--                                                                  . right (left (merge x).right (merge y))
+--                                                                  $ b 
 
-                                                (Right(Left  x)) -> right (left  (merge x)) $ b 
-                                                (Right(Right y)) -> right (right (merge y)) $ b
+--                                                (Right(Left  x)) -> right (left  (merge x)) $ b 
+--                                                (Right(Right y)) -> right (right (merge y)) $ b
 
-         start (Parallel stm1 stm2) = ParallelSt (Left (start stm1,start stm2)) 
+--         start (Parallel stm1 stm2) = ParallelSt (Left (start stm1,start stm2)) 
 
 
-data ParallelMachine stm1 stm2 out = Parallel (stm1 out) (stm2 out) 
-deriving instance (Functor stm1,Functor stm2 ) => Functor (ParallelMachine stm1 stm2)
+--data ParallelMachine stm1 stm2 out = Parallel (stm1 out) (stm2 out) 
+--deriving instance (Functor stm1,Functor stm2 ) => Functor (ParallelMachine stm1 stm2)
 -----------------------------------------------------------------------------------------
 
 
 
 
 -----------------------------------------------------------------------------------------
+-- TODO: some code is duplicate!!!
 --instance ( MachineCombinator stm1
 --         , MachineCombinator stm2
 --         , Input stm1 ~ Input stm2
---         , Monoid mid2
---         ) => MachineCombinator (SequencedMachine stm1 mid1 mid2 stm2) where
+--         ) => MachineCombinator (SequencedMachine stm1 mid stm2) where
 
-       --  data State (Sequenced stm1 mid1 mid2 stm2) out = K
-                                                          --SequencedSt ( TriState  (State stm1 (mid1 -> mid2))
-                                                          --                        (State stm2 mid1)
-                                                          --            ) 
-                                                          --            (Maybe (mid1 -> mid2)) 
+--         data State (SequencedMachine stm1 mid stm2) out = SequencedSt ( TriState  (State stm1 (mid -> out))
+--                                                                                   (State stm2 out)
+--                                                                       ) 
                                                                       
                                                                       
   
---         type Input (Sequenced stm1 mid1 mid2 stm2)     = Input stm1
+--         type Input (SequencedMachine stm1 mid stm2)    = Input stm1
 
 
---         trigger inn  (Sequenced   stmA f stmB) 
---                      (SequencedSt stA  g  stB)         = let (mid,stmB') = trigger inn stmB stB
+--         trigger inn (Sequenced stm1 stm2) (SequencedSt st) = let (st1,st2) = fromTrieState st
+--                                                                  st2'      = do x    <- collect <$> st1
+--                                                                                 (fmap ($x) <$> st2) <|> st2 
 
---                                                              (g' ,stmA') = maybe (Nothing,Nothing)
---                                                                                  (trigger inn stmA)
---                                                                                  stA 
+--                                                               in  SequencedSt . toTriState (trigger inn stm<$>st1)
+--                                                                                            (trigger inn stm<$>st2') 
 
---                                                           in ( f <$> (g <*> mid)
---                                                              , SequencedSt stmA' g <$> stmB'
---                                                              )
+--         collect (SequencedSt st)  = case st of 
+--                                      Left (_,st2)       -> collect st2
+--                                      Right (Right st2)  -> collect st2
+--                                      _                  -> Nothing
 
---         merge (SequencedSt stA   g   stB )
---               (SequencedSt stA'  g'  stB')              = SequencedSt (may merge stA stA')
---                                                                       (may mix g g')
---                                                                       (merge stB stB')
---                                    where
---                                      may::(a->a->a) -> Maybe a -> Maybe a -> Maybe a
---                                      may f a b = (uncurry f <$> ((,)<$>a<*>b)) <|> a <|> b
+--         start (Sequenced stm1 stm2) = let st1 = start stm1
+--                                        in case collect st1 of
+--                                          Nothing -> SequencedSt $Right (Left st1)
+--                                          Just x  -> SequencedSt $Left (st1, start $ ($x) fmap stm2)
+                                         
 
---                                      mix f g x =  f x <> g x
+--         merge (SequencedSt a )(SequencedSt b) = SequencedSt $ case a of 
+--                                                    (Left (x,y))     -> left (merge x *** merge y) 
+--                                                                      . right (left (merge x).right (merge y))
+--                                                                      $ b 
 
-data SequencedMachine  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)) (mid2 -> output) (stm2 mid)
----- TODO, merge a new fresh st2 to st2' every time (trigger inn stm1 st1) produce an output!!!!
----- Otherwise this machine is pointless.... 
+--                                                    (Right(Left  x)) -> right (left  (merge x)) $ b 
+--                                                    (Right(Right y)) -> right (right (merge y)) $ b
 
---data SequencedMachine  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)) 
---                                                             (mid2 -> output) (Maybe(State (stm2 mid))) (stm2 mid)
+
+--instance (Functor stm1) => Functor (SequencedMachine stm1 mid stm2) where
+--  fmap f (Sequenced stm1 stm2) = Sequenced (fmap f<$>stm1) stm2 
+--data SequencedMachine  stm1 mid stm2 output = Sequenced (stm1 (mid -> output)) (stm2 mid)
 
 -----------------------------------------------------------------------------------------
 
@@ -257,9 +253,6 @@ data SequencedMachine  stm1 mid mid2 stm2 output = Sequenced (stm1 (mid -> mid2)
 
 
 
----- TODO: change refactor trigger such trigger =  (collects.trigger) &&& trigger' !!
-
-
 -------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
 
@@ -290,6 +283,8 @@ toTriState Nothing  (Just b) = Just $ Right (Right b)
 toTriState (Just a) (Just b) = Just $ Left (a,b)
 
 
+fromTrieState::TriState a b -> (Maybe a,Maybe b)
+fromTrieState = undefined
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------------------
