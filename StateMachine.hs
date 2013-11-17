@@ -32,14 +32,28 @@ import Prelude hiding ((.),id) -- we use those from Category...
 -- Represent an StateMachine  in a set of concurrent states of execution.
 -- it is feeded with value of type "input" and out values of type" output" when success.
 data StateMachine input output where
-  Wrap:: (MachineCombinator stm) => stm output -> StateMachine input output
+  Wrap:: (MachineCombinator stm, Input stm ~  input) => stm output -> StateMachine input output
 
+
+instance Functor (StateMachine input) where
+  fmap f (Wrap stm)= Wrap$ fmap f stm 
+
+instance Applicative (StateMachine input) where
+  pure x                      = Wrap$Step True (Just x) (const Nothing)
+  Wrap stm1 <*> Wrap stm2 
+     | Just f <- collect stm1 = Wrap$Sequenced stm2 (Left (stm1, f<$>stm2))
+     | otherwise              = Wrap$Sequenced stm2 (Right(Left stm1)) 
+
+
+instance Alternative (StateMachine input) where
+  empty                      = Wrap$Step True Nothing (const Nothing) 
+  Wrap stm1 <|> Wrap stm2    = Wrap$Parallel(Left (stm1,stm2))
+  many (Wrap stm)            = Wrap$Loop stm (Just [])  ((:) <$> stm)
+  some (Wrap stm)            = Wrap$Loop stm Nothing    ((:) <$> stm)
 
 ----TODO: Check the laws.....
 ----TODO...
---instance Functor     (CompleteMachine input) where
---instance Applicative (CompleteMachine input) where
---instance Alternative (CompleteMachine input) where
+---- Add instnces of:
 --instance Category    CompleteMachine         where
 --instance Arrow       CompleteMachine         where
 --instance ArrowChoice CompleteMachine         where
@@ -48,7 +62,7 @@ data StateMachine input output where
 --element  
 --filteringOut
 -- minus
--- and...
+-- and...with the simultaneo machine....
 --filteringIn
 --elements 
 --separateBy 
@@ -57,7 +71,7 @@ data StateMachine input output where
 --some 
 --many 
 --empty
-
+--optional
 
 
 ---------------------------------------------------------------------------------------------
@@ -72,7 +86,7 @@ data StateMachine input output where
 class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
     type Input stm  :: * 
-
+  --type Output stm :: * add the output type also!!
     trigger  :: Input stm   -> stm output    -> Maybe (stm output)
     collect  :: stm output  -> Maybe output  
     merge    :: stm out     -> stm out -> stm out
@@ -144,7 +158,7 @@ instance (Functor stm1,Functor stm2 ) => Functor (ParallelMachine stm1 stm2) whe
 
 
 -----------------------------------------------------------------------------------------
-
+-- Esta mal!!! -> ¿?
 instance ( MachineCombinator stm1
          , MachineCombinator stm2
          , Input stm1 ~ Input stm2
@@ -206,6 +220,7 @@ instance (Functor stm1,Functor stm2) =>  Functor (SequencedMachine stm1 mid stm2
 ---- change names .... loop -> loopMachine
 
 ------------------------------------------------------------------------------------------
+
 instance ( MachineCombinator stm
          ) => MachineCombinator (LoopMachine stm mid) where 
 
@@ -213,8 +228,12 @@ instance ( MachineCombinator stm
 
 
          trigger inn (Loop cte x stm)
-              | Just f  <- collect stm      = let stm'  = ((f.).(++) . return ) <$> cte
-                                                  stm'' = merge stm' stm  
+              | Just f  <- collect stm      = let stm'  = ((f.).(:)) <$> cte 
+                                                  stm'' = merge stm' stm     
+                                    -- This line was the key to solve this library.... :) the idea is,simple, we store the list together with
+                                    -- a functions from list to the output, please notice that:  
+                                    --  "stm ([mid]-> output,[mid])"" and "stm ([mid]-> output)" are equivalent for our purpposse 
+
 
                                                in Loop cte Nothing <$> trigger inn stm
 
@@ -254,7 +273,7 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 
 
 ------------------------------------------------------------------------------------------
-
+--instance Simultaneos machine:
 
 
 
@@ -272,15 +291,6 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 ------------------------------------------------------------------------------------------
 
 
-
-
-
--- Isomorphic to Maybe, but we explicitly indicate why we are we using it....
-data TakingLeft a = Mempty | Took a deriving Functor
-instance Monoid (TakingLeft a) where
-  mempty = Mempty
-  Mempty `mappend` x = x
-  x   `mappend` _    = x 
 
 
 
@@ -294,7 +304,10 @@ toTriState (Just a) (Just b) = Just $ Left (a,b)
 
 
 fromTrieState::TriState a b -> (Maybe a,Maybe b)
-fromTrieState = undefined
+fromTrieState st = case st of 
+                    (Left (a,b))      -> (Just a , Just b )
+                    (Right (Left a )) -> (Just a , Nothing)
+                    (Right (Right b)) -> (Nothing, Just b )
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
