@@ -33,7 +33,8 @@ import Internal.MachineComponent
 -- Represent an StateMachine  in a set of concurrent states of execution.
 -- it is feeded with value of type "input" and out values of type" output" when success.
 data StateMachine input output where
-  Wrap:: (MachineCombinator stm, Input stm ~  input) => stm output -> StateMachine input output
+  Wrap:: (MachineCombinator stm, Input stm ~  input) =>  stm output -> StateMachine input output
+
 
 
 instance Functor (StateMachine input) where
@@ -58,28 +59,48 @@ instance Alternative (StateMachine input) where
 --instance ArrowChoice CompleteMachine         where
 
 elementWith::(a -> Maybe b) -> StateMachine a b
-elementWith = undefined
+elementWith f = Wrap$Step True Nothing f
 
 elementSuch::(a -> Bool) -> StateMachine a a 
-elementSuch = undefined
+elementSuch cond = elementWith (\x -> if cond x then Just x else Nothing)
 
 element::(Eq a) => a -> StateMachine a a
-element = undefined
+element x = elementSuch (==x)
 
 anything::StateMachine a a 
-anything = undefined
+anything = elementWith return 
 
 separateBy::StateMachine a b -> StateMachine a c -> StateMachine a [b]  
-separateBy = undefined
+separateBy stm sep = (:) <$> stm <*> many (sep *> stm)
 
 enclosed::StateMachine a b -> StateMachine a c -> StateMachine a d -> StateMachine a c 
-enclosed = undefined
+enclosed lft stm rght = lft *> stm <* rght 
+
+parse::StateMachine a b -> [a] -> Maybe b
+parse (Wrap stm) = (collect =<<) . foldr ((=<<).trigger) (Just stm).reverse
+
+
+string::(Eq a) => [a] -> StateMachine a [a]
+string stream =  foldr (\a b -> (:) <$> a <*> b) (pure []) (map element stream)  
+
+tokenize::[StateMachine a b] -> [a] -> ([b],[a])
+tokenize = undefined
+
+-- This function is supposse to behave somehow as Flex
+
+stateFullTokenize::(state -> [StateMachine a (b,state)]) -> state -> ([b],[state],[a])
+stateFullTokenize = undefined
+------------------------------------------------------------------------------------------------
+---- TODO: this functions below rely on the Arrow instances not defined yet....
 
 notBeing::StateMachine a b -> StateMachine a c -> StateMachine a b 
 notBeing = undefined
 
+whateverBut:: StateMachine a b -> StateMachine a ()
+whateverBut = undefined
+
 being::StateMachine a b -> StateMachine a c -> StateMachine a (b,c)
-being = undefined
+being = undefined -- 
 
 recording::StateMachine a b -> (a -> acc -> acc) -> StateMachine a (Maybe b,acc)
 recording = undefined
@@ -87,25 +108,6 @@ recording = undefined
 recordingError::StateMachine a b -> (a -> err -> err) -> StateMachine a (Either b err)
 recordingError = undefined
 
-parse::StateMachine a b -> [a] -> Maybe b
-parse = undefined
-
 parseText::StateMachine Char b -> String -> Either c (Int,Int,String)
 parseText = undefined
-
-tokenize::[StateMachine a b] -> [a] -> ([b],[a])
-tokenize = undefined
-
---filteringOut
--- minus
--- and...with the simultaneo machine....
---filteringIn
---elements 
---separateBy 
---enclosed  
---anything          
---some 
---many 
---empty
---optional
 

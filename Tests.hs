@@ -11,11 +11,11 @@
            , EmptyDataDecls
            , DeriveFunctor
            , PolyKinds
+           , NoMonomorphismRestriction
            #-}
 
 module Test where
-    
-module StateMachine where
+
 
 
 import Control.Applicative
@@ -26,7 +26,7 @@ import Data.Function(on)
 --import Prelude hiding ((.),id) -- we use those from Category...
 import StateMachine
 import Internal.MachineComponent
-
+import Data.Char
 
 
 
@@ -109,6 +109,38 @@ import Internal.MachineComponent
 
 
 
+
+
+parser = (:)<$> element 'x' <*> pure []
+--string "hola"
+
+
+debuging::StateMachine Char String -> String -> String
+debuging (Wrap parse) [] = unlines 
+                  [ unlines $ debug parse  
+                  , "#################################"
+                  , "####### Partially got: " ++ show (collect parse)            
+                  , "<---------------------------------------> End of the stream: <--------------------------------->"
+                  , "#################################################################################################"
+                  , ""
+                  , ""
+                  ] 
+                       
+
+debuging (Wrap parse) (c:cs) = unlines 
+                  [ unlines $ debug parse  
+                  , "#################################"
+                  , "####### Partially got: " ++ show (collect parse)            
+                  , "#################################################################################################"
+                  , "Feeding with: "++ show c
+                  , ""
+                  , case (trigger c parse) of 
+                            (Nothing) -> "<--------------- Suddenly end of parseser :( XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX>"
+                            (Just parse')  -> debuging (Wrap parse') cs
+                  ] 
+
+
+--p = Sequenced (Step True Nothing (const (Just "o"))  )  (Left (Left (Step True Nothing  (const $Just ('h':)) )))
 
 
 

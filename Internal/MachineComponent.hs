@@ -34,6 +34,7 @@ import Prelude hiding ((.),id) -- we use those from Category...
 ------ collect st1 <|> collect st2   == collect (st1 `merge` st2)
 ------ todo, faltan leyes...
 
+
 class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
     type Input stm  :: * 
@@ -41,9 +42,7 @@ class (Functor stm) => MachineCombinator (stm :: * -> * ) where
     trigger  :: Input stm   -> stm output    -> Maybe (stm output)
     collect  :: stm output  -> Maybe output  
     merge    :: stm out     -> stm out -> stm out
-
-
-
+    debug    :: stm out     -> [String] -- TODO: delete....
 --------------------------------------------------------------------------------------
 
 -- Here there's a list of MachineCombinators, complete enough to define all the instances
@@ -57,6 +56,8 @@ class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
 
 --------------------------------------------------------------------------------------
+data StepMachine input output = Step Bool (Maybe output) (input -> Maybe output) -- TODO check spell
+
 instance MachineCombinator (StepMachine input) where
                                         
     type Input (StepMachine input)          = input
@@ -67,14 +68,22 @@ instance MachineCombinator (StepMachine input) where
 
     collect (Step _ x  _)                   = x 
     merge   (Step b x f)  (Step b' x' _)    = Step (b||b') (x <|> x') f
+ 
+    debug (Step b x f) = [ "-> Step:"
+                         , "    " ++ show b 
+                         , "    " ++ show (x *> pure () )
+                         ]
 
-data StepMachine input output = Step Bool (Maybe output) (input -> Maybe output) -- TODO check spell 
+
 deriving instance Functor (StepMachine inn) 
 ---------------------------------------------------------------------------------------
 
 
+inc = map ("   "++)
 
 -----------------------------------------------------------------------------------------
+data ParallelMachine stm1 stm2 out = Parallel (TriState (stm1 out) (stm2 out))
+
 instance ( MachineCombinator stm1 
          , MachineCombinator stm2
          , Input stm1 ~ Input stm2 
@@ -82,7 +91,7 @@ instance ( MachineCombinator stm1
 
          type Input (ParallelMachine stm1 stm2)     = Input stm1
 
-         trigger inn (Parallel st)    =  case st of
+         trigger inn (Parallel st)    =  case st of --TODO: refactor the code....
                                           Left  (st1,st2)   -> Parallel <$> toTriState (trigger inn st1)  (trigger inn st2)
                                           Right (Left  st1) -> Parallel <$> toTriState (trigger inn st1)  Nothing
                                           Right (Right st2) -> Parallel <$> toTriState Nothing            (trigger inn st2)
@@ -98,9 +107,16 @@ instance ( MachineCombinator stm1
                                                 (Right(Left  x)) -> right (left  (merge x)) $ b 
                                                 (Right(Right y)) -> right (right (merge y)) $ b
 
+         debug (Parallel s) = let (a,b) = fromTriState s
+                               in 
+                                  [ "Parallel:"
+                                  ] 
+                                  ++ inc ["Option 1"]
+                                  ++ (inc.inc.inc) (maybe ["-> DOWN"] debug a)
+                                  ++ inc ["Option 2"] 
+                                  ++ (inc.inc.inc) (maybe ["-> DOWN"] debug b)
 
 
-data ParallelMachine stm1 stm2 out = Parallel (TriState (stm1 out) (stm2 out))
 instance (Functor stm1,Functor stm2 ) => Functor (ParallelMachine stm1 stm2) where
   fmap f (Parallel st) = Parallel $ ((fmap f ***fmap f)+++ fmap f +++ fmap f$st )
 
@@ -110,6 +126,9 @@ instance (Functor stm1,Functor stm2 ) => Functor (ParallelMachine stm1 stm2) whe
 
 
 -----------------------------------------------------------------------------------------
+-- TODO: refactorizar...
+data  SequencedMachine  stm1 mid stm2 out = Sequenced (stm2 mid) (TriState  (stm1 (mid -> out)) (stm2 out))
+
 instance ( MachineCombinator stm1
          , MachineCombinator stm2
          , Input stm1 ~ Input stm2
@@ -117,28 +136,18 @@ instance ( MachineCombinator stm1
 
          type Input (SequencedMachine stm1 mid stm2)    = Input stm1
 
-         trigger inn (Sequenced cte st)  = case st of 
-                                            
-                                            Left  (st1,st2) 
-                                              
-                                              | Just f <- collect st1  -> Sequenced cte <$> toTriState
-                                                                          (trigger inn st1)
-                                                                          (trigger inn$ merge (f<$>cte) st2)
+         --TODO, the code looks horrible...lets just refactor a bit......
 
-                                              | otherwise              -> Sequenced cte <$> toTriState
-                                                                          (trigger inn st1)
-                                                                          (trigger inn st2)
+         trigger inn (Sequenced cte st)  = let (st1 ,st2 ) = fromTriState st 
+                                               (st1',st2') = ( trigger inn =<< st1 
+                                                             , trigger inn =<< st2
+                                                             )
+                                               new         = (($cte).fmap) <$> (collect =<< st1')
+                                               newAndSt2'  = merge <$> new <*> st2'
 
-                                            Right (Left st1)
-                                              | Just f <- collect st1  -> Sequenced cte <$> toTriState
-                                                                          (trigger inn st1)
-                                                                          (trigger inn (f<$>cte))
-                                              
-                                              | otherwise              ->  Sequenced cte . Right . Left
-                                                                       <$> trigger inn st1
+                                            in Sequenced cte <$> toTriState st1' 
+                                                                 (newAndSt2' <|> new <|> st2')
 
-                                            Right (Right st2)          ->  Sequenced cte . Right . Right
-                                                                       <$> trigger inn st2 
                 
          collect (Sequenced _ st)  = case st of 
                                       Left (_,st2)       -> collect st2
@@ -155,10 +164,16 @@ instance ( MachineCombinator stm1
                                                     (Right(Left  x)) -> right (left  (merge x)) $ st2'
                                                     (Right(Right y)) -> right (right (merge y)) $ st2'
 
-
-
-
-data  SequencedMachine  stm1 mid stm2 out = Sequenced (stm2 mid) (TriState  (stm1 (mid -> out)) (stm2 out))
+         debug (Sequenced c s) = let (a,b) = fromTriState s
+                                 in 
+                                      [ "Sequenced:"
+                                      ] 
+                                      ++ inc ["First"]
+                                      ++ (inc.inc.inc) (maybe ["-> DOWN"] debug a)
+                                      ++ inc ["Second"] 
+                                      ++ (inc.inc.inc) (maybe ["-> DOWN"] debug b)
+                                      ++ inc ["Memory"] 
+                                      ++ inc ((inc.inc.debug) c)
 
 instance (Functor stm1,Functor stm2) =>  Functor (SequencedMachine stm1 mid stm2) where
   fmap f (Sequenced cte st) = Sequenced cte   ((update***fmap f)+++ update +++ fmap f$st )
@@ -254,8 +269,8 @@ toTriState Nothing  (Just b) = Just $ Right (Right b)
 toTriState (Just a) (Just b) = Just $ Left (a,b)
 
 
-fromTrieState::TriState a b -> (Maybe a,Maybe b)
-fromTrieState st = case st of 
+fromTriState::TriState a b -> (Maybe a,Maybe b)
+fromTriState st = case st of 
                     (Left (a,b))      -> (Just a , Just b )
                     (Right (Left a )) -> (Just a , Nothing)
                     (Right (Right b)) -> (Nothing, Just b )
