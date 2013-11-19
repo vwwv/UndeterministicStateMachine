@@ -99,13 +99,15 @@ instance ( MachineCombinator stm1
          collect (Parallel st)        = either (uncurry (<|>).(collect***collect))  (either collect collect)
                                       $ st
 
-         merge (Parallel a) (Parallel b) = Parallel $ case a of 
-                                                (Left (x,y))     -> left (merge x *** merge y) 
-                                                                  . right (left (merge x).right (merge y))
-                                                                  $ b 
 
-                                                (Right(Left  x)) -> right (left  (merge x)) $ b 
-                                                (Right(Right y)) -> right (right (merge y)) $ b
+--TODO: Duplicate code...
+         merge original@(Parallel a)
+                         (Parallel b) = let  (stA , stB ) = fromTriState a
+                                             (stA', stB') = fromTriState b
+                                             a <||> b     = (merge<$>a<*>b)<|>a<|>b
+
+                                         in maybe original Parallel
+                                                           (toTriState (stA <||> stA') (stB <||> stB') )
 
          debug (Parallel s) = let (a,b) = fromTriState s
                                in 
@@ -155,14 +157,17 @@ instance ( MachineCombinator stm1
                                       _                  -> Nothing
                                          
 
-         merge (Sequenced st1 st2 )
-               (Sequenced st1' st2') = Sequenced (merge st1 st1') $ case st2 of 
-                                                    (Left (x,y))     -> left (merge x *** merge y) 
-                                                                      . right (left (merge x).right (merge y))
-                                                                      $ st2'
+         merge original@(Sequenced st1 st2 )
+               (Sequenced st1'  st2') = let  (stA , stB ) = fromTriState st2
+                                             (stA', stB') = fromTriState st2'
 
-                                                    (Right(Left  x)) -> right (left  (merge x)) $ st2'
-                                                    (Right(Right y)) -> right (right (merge y)) $ st2'
+                                             a <||> b     = (merge<$>a<*>b)<|>a<|>b
+
+                                         in maybe original (Sequenced (merge st1 st1')) 
+                                                           (toTriState (stA <||> stA') (stB <||> stB') )
+
+
+
 
          debug (Sequenced c s) = let (a,b) = fromTriState s
                                  in 
@@ -186,39 +191,41 @@ instance (Functor stm1,Functor stm2) =>  Functor (SequencedMachine stm1 mid stm2
 ---- change names .... loop -> loopMachine
 
 ------------------------------------------------------------------------------------------
-
+data LoopMachine stm mid  output = Loop (stm mid) (stm ([mid]->output))
 instance ( MachineCombinator stm
          ) => MachineCombinator (LoopMachine stm mid) where 
 
          type Input (LoopMachine stm mid)     = Input stm
 
+         trigger inn (Loop cte stm) = case trigger inn stm of 
 
-         trigger inn (Loop cte x stm)
-              | Just f  <- collect stm      = let stm'  = ((f.).(:)) <$> cte 
-                                                  stm'' = merge stm' stm     
-                                    -- This line was the key to solve this library.... :) the idea is,simple, we store the list together with
-                                    -- a functions from list to the output, please notice that:  
-                                    --  "stm ([mid]-> output,[mid])"" and "stm ([mid]-> output)" are equivalent for our purpposse 
+                                        Just stm'
+                                         | Just f <- collect stm'    -> Just $Loop cte $ merge ( ((.)f.(:)) <$> cte) stm'
+
+                                         | otherwise                 -> Just $Loop cte stm'
+
+                                        Nothing                      -> Nothing
 
 
-                                               in Loop cte Nothing <$> trigger inn stm
+         collect (Loop _ stm)       = ($[]) <$> collect stm  
 
-              | otherwise                   = Loop cte Nothing <$> trigger inn stm
-                   where
-                    update :: ([a]->out) -> a -> ([a]->out)
-                    update g =  (g.).(++) . return 
+         merge  (Loop cte  stm )
+                (Loop cte' stm')    = Loop (merge cte cte') (merge stm stm') 
 
-         collect (Loop _ x _)               = x 
+         debug (Loop c s) = [ "Loop:"
+                            ] 
+                            ++ inc ["Inside"] 
+                            ++ (inc.inc.inc) (debug s)
+                            ++ inc ["Memory"] 
+                            ++ inc ((inc.inc.debug) c)
 
-         merge  (Loop cte  x  stm )
-                (Loop cte' x' stm')         = Loop (merge cte cte') (x<|>x')(merge stm stm') 
-
-data LoopMachine stm mid  output = Loop (stm mid) (Maybe output) (stm ([mid]->output))
 instance (Functor stm) => Functor (LoopMachine stm mid) where
-  fmap f (Loop cte x stm) = Loop cte (f<$>x) (fmap f <$> stm) 
+  fmap f (Loop cte stm) = Loop cte (fmap f <$> stm) 
 
 ------------------------------------------------------------------------------------------
 
+
+-- todo: add value cache for all the which may need, and avoid unecesary merging
 
 ------------------------------------------------------------------------------------------
 --instance ( StateMachine stm 
@@ -231,6 +238,8 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 --         trigger inn (FilterMachine stm inF outF) (FilterSt st)
 --                      | Just mid <- inF inn         = (outF=<<) *** (FilterSt<$>) $ trigger mid stm st 
 --                      | otherwise                   = (Nothing, Just$FilterSt st)
+
+
 
 
 
@@ -255,7 +264,7 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
-
+--TODO: recheck all the information remains at the bottom...
 
 
 

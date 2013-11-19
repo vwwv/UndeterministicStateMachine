@@ -111,7 +111,13 @@ import Data.Char
 
 
 
-parser = (:)<$> element 'x' <*> pure []
+--parser = (:)<$> element 'x' <*> pure []
+
+--parser = hola <$> enclosed spaces (separateBy (string "hola" <|> string "mundo" ) spaces) spaces 
+parser = string "hola" <|> string "mundo"
+  where
+    -- hola   = unlines -- undefined
+    -- spaces = some $ elementSuch isSpace
 --string "hola"
 
 

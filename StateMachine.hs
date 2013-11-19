@@ -47,12 +47,18 @@ instance Applicative (StateMachine input) where
      | otherwise              = Wrap$Sequenced stm2 (Right(Left stm1)) 
 
 instance Alternative (StateMachine input) where
+  
   empty                      = Wrap$Step True Nothing (const Nothing) 
+  
   Wrap stm1 <|> Wrap stm2    = Wrap$Parallel(Left (stm1,stm2))
-  many (Wrap stm)            = Wrap$Loop stm (Just [])  ((:) <$> stm)
-  some (Wrap stm)            = Wrap$Loop stm Nothing    ((:) <$> stm)
 
-----TODO...
+  some (Wrap stm)             
+        | Just x <- collect stm = Wrap$Loop stm ( ((.)(x:).(:)) <$> stm)
+        | otherwise             = Wrap$Loop stm ( (:)           <$> stm)
+
+  many v                     = some v <|> pure [] -- I'm wondering why I do need this...
+
+----TODO......
 ---- Add instnces of:
 --instance Category    CompleteMachine         where
 --instance Arrow       CompleteMachine         where
