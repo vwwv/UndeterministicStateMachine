@@ -28,6 +28,8 @@ import Prelude hiding ((.),id) -- we use those from Category...
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
 -- Combinators to define an State machine:
+-- The class should be visible, but not the instances...
+
 
 -- provisional laws:
 ------ trigger inn (st1 `merge` st2) == (trigger inn st1) `merge` (trigger inn st2) 
