@@ -106,7 +106,6 @@ instance ( MachineCombinator stm1
          merge original@(Parallel a)
                          (Parallel b) = let  (stA , stB ) = fromTriState a
                                              (stA', stB') = fromTriState b
-                                             a <||> b     = (merge<$>a<*>b)<|>a<|>b
 
                                          in maybe original Parallel
                                                            (toTriState (stA <||> stA') (stB <||> stB') )
@@ -147,18 +146,13 @@ instance ( MachineCombinator stm1
                                                              , trigger inn =<< st2
                                                              )
                                                new         = (($cte).fmap) <$> (collect =<< st1')
-                                               newAndSt2'  = merge <$> new <*> st2'
 
                                             in Sequenced cte <$> toTriState st1' 
-                                                                 (newAndSt2' <|> new <|> st2')
+                                                                 (new <||> st2')
 
                 
-         collect (Sequenced _ st)  = case st of 
-                                      Left (_,st2)       -> collect st2
-                                      Right (Right st2)  -> collect st2
-                                      _                  -> Nothing
+         collect (Sequenced _ st)  = collect=<< (snd.fromTriState) st  
                                          
-
          merge original@(Sequenced st1 st2 )
                (Sequenced st1'  st2') = let  (stA , stB ) = fromTriState st2
                                              (stA', stB') = fromTriState st2'
@@ -250,11 +244,32 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 
 
 ------------------------------------------------------------------------------------------
---instance Simultaneos machine:
+data InjectedMachine stm1 mid stm2 out = Injected (stm2 out) (TriState (stm1 mid) (stm2 out))  
+instance ( MachineCombinator stm1
+         , MachineCombinator stm2
+         , Input stm2 ~ mid
+         ) => MachineCombinator (InjectedMachine stm1 mid stm2) where
 
+         type Input (InjectedMachine stm1 mid stm2) = Input stm1
 
+         merge (Injected cte  st2)
+               (Injected cte' st2') = Injected (merge cte cte')  (mergeTriState st2 st2')  
 
+         collect (Injected _ st) = collect=<< (snd.fromTriState) st  
+         
+         trigger inn (Injected cte st)   = let (st1 ,st2 ) = fromTriState st
+                                               st1'        = trigger inn=<<st1 
+                                               st2'        = case collect=<<st1' of
+                                                               Just x  -> trigger x =<< (merge cte <$> st2) 
+                                                               Nothing -> st2 
 
+                                            in Injected cte <$> toTriState st1' st2' 
+                                                                 
+
+         debug       = const ["black blox"]
+
+instance (Functor stm2 ) => Functor (InjectedMachine stm1 mid stm2) where
+  fmap f (Injected st st') = Injected (fmap f st) $ ( (id***fmap f)+++ id+++fmap f) st'
 ------------------------------------------------------------------------------------------
 
 
@@ -267,9 +282,9 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
 --TODO: recheck all the information remains at the bottom...
-
-
-
+--TODO: refactor the common code...
+-- TODO: let it full of comments!!
+-- TODO: cache or not cache?
 
 type TriState a b = Either (a,b) (Either a b) 
 
@@ -287,6 +302,18 @@ fromTriState st = case st of
                     (Right (Right b)) -> (Nothing, Just b )
 
 
+mergeTriState::( MachineCombinator stm1
+               , MachineCombinator stm2
+               ) => TriState (stm1 a) (stm2 b) -> TriState (stm1 a) (stm2 b) -> TriState (stm1 a) (stm2 b) 
+mergeTriState = undefined 
+
+
+
+
+a <||> b     = (merge<$>a<*>b)<|>a<|>b
+
+
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -294,7 +321,7 @@ fromTriState st = case st of
 
 
 
-
+-- TODO : no to the "merge" optimization
 
 
 
