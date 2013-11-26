@@ -22,12 +22,12 @@ import Control.Applicative
 import Control.Arrow
 import Data.Monoid
 import Data.Function(on)
--- import Control.Category
--- import Prelude hiding ((.),id) -- we use those from Category...
+import Control.Category
+import Prelude hiding ((.),id) -- we use those from Category...
 import Internal.MachineComponent
 import Data.Char
 import Data.Time.Clock
-
+import Data.Maybe
 {- Author : Alejandro Durán Pallarés (That's me...) 
 
 
@@ -62,23 +62,42 @@ instance Alternative (StateMachine input) where
 
   many v                     = some v <|> pure [] -- I'm wondering why I do need this...
 
-----TODO......
----- Add instnces of:
+-- TODO:  check the laws!! 
 --instance Category    StateMachine         where
+--  id              = anything
+
+--  Wrap f . Wrap g = let  x  = collect g
+--                         f' = fromMaybe f (flip trigger f =<< x)
+--                         y  = collect f'
+
+--                     in Wrap$Injected f y (Left (g,f'))
+
 --instance Arrow       StateMachine         where
+--   arr f     = Wrap$Step True Nothing (Just . f)
+--   first stm = (,) <$> (contraMap fst stm) <*> (arr snd ) 
+
 --instance ArrowChoice StateMachine         where
+--   left stm = (   contraMap (either undefined (const Nothing)) (with id) >>> fmap Left stm 
+--              ) 
+--              <|> 
+--              (   contraMap (either (const Nothing) id) (with id)) 
+-- check if it does works...
+-- take out the contraMap above...
 
-elementWith::(a -> Maybe b) -> StateMachine a b
-elementWith f = Wrap$Step True Nothing f
+--contraMap::(a->b) -> StateMachine b c -> StateMachine a c 
+--contraMap = undefined 
 
-elementSuch::(a -> Bool) -> StateMachine a a 
-elementSuch cond = elementWith (\x -> if cond x then Just x else Nothing)
+with::(a -> Maybe b) -> StateMachine a b
+with f = Wrap$Step True Nothing f
+
+such::(a -> Bool) -> StateMachine a a 
+such cond = with (\x -> if cond x then Just x else Nothing)
 
 element::(Eq a) => a -> StateMachine a a
-element x = elementSuch (==x)
+element x = such (==x)
 
 anything::StateMachine a a 
-anything = elementWith return 
+anything = with return 
 
 separatedBy::StateMachine a c -> StateMachine a b -> StateMachine a [b]  
 separatedBy sep stm = (:) <$> stm <*> many (sep *> stm)
@@ -92,8 +111,8 @@ string stream =  foldr (\a b -> (:) <$> a <*> b) (pure []) (map element stream)
 parse::StateMachine a b -> [a] -> Maybe b
 parse (Wrap stm) = (collect =<<) . foldr ((=<<).trigger) (Just stm).reverse
 
-tokenize::[StateMachine a b] -> [a] -> ([b],[a])
-tokenize = undefined
+--tokenize::[StateMachine a b] -> [a] -> ([b],[a])
+--tokenize = undefined
 
 ------------------------------------------------------------------------------------------------
 ---- TODO: this functions will rely on the Arrowed combinators not defined yet....
@@ -135,11 +154,11 @@ class DefinedStateMahine inn out where
 
 instance DefinedStateMahine Char Int where
   field = foldl (\acc c-> (ord c - 48) + 10*acc) 0
-      <$> some (elementSuch isDigit)
+      <$> some (such isDigit)
 
 --Might get this one out of here....is a bit pointless...
 instance DefinedStateMahine Char () where
-  field = () <$ some (elementSuch isSpace)
+  field = () <$ some (such isSpace)
 
 
 --Time can be tedious for parsing...related instances can be quiet usefull....
@@ -147,19 +166,21 @@ instance DefinedStateMahine Char () where
 --Okey, true, this one is just for the example...but one extended to more general
 -- formats it could be awesome....
 instance DefinedStateMahine Char DiffTime where
-  field = format <$> digit <*> (digit <* element ':')
-                 <*> digit <*> (digit <* element ':')
-                 <*> digit <*> (digit <* element ',')
-                 <*> digit <*> digit <*> digit
+  field = format <$> digit <*> (digit <* element' ':')
+                 <*> digit <*> (digit <* element' ':')
+                 <*> digit <*> digit 
+                 <*> optional  ((,,)<$> ((element' '.' <|> element' ',')  *> digit) <*> digit <*> digit)
+                 
    where
 
-      format a b c d e f g h i  = let [h1, h0, m1, m0, s1, s0, p2, p1, p0] = fmap (\c->fromIntegral (ord c) - 48 )
-                                                                             [a, b, c, d, e, f, g, h, i]
+      format a b c d e f p  = let [h1, h0, m1, m0, s1, s0,p2,p1,p0 ] = fmap (\c->fromIntegral (ord c) - 48 )
+                                                                             [a, b, c, d, e, f, g, h,i]
+                                  (g,h,i)                            = fromMaybe ('0','0','0') p
+                                                        
+                               in (secondsToDiffTime $ ((h1*10+h0)*60 + m1*10+m0)*60 + s1*10+s0)
+                                  + (picosecondsToDiffTime $ (p2*100 + p1*10+p0)*(10^9))
 
-                                   in (secondsToDiffTime $ ((h1*10+h0)*60 + m1*10+m0)*60 + s1*10+s0)
-                                      + (picosecondsToDiffTime $ (p2*100 + p1*10 + p0)*(10^9))
-
-      digit                     = elementSuch isDigit
-
-
+      digit                     = such isDigit
+      element' x                = space *> element x <* space
+      space                     = many $ such isSpace
 

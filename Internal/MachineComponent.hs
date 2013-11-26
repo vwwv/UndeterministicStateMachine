@@ -221,55 +221,33 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 ------------------------------------------------------------------------------------------
 
 
--- todo: add value cache for all the which may need, and avoid unecesary merging
-
 ------------------------------------------------------------------------------------------
---instance ( StateMachine stm 
---         ) => StateMachine (FilterMachine stm mid inn) where
---         data State (FilterMachine stm mid inn) out = FilterSt (State stm mid)
---         type Input (FilterMachine stm mid inn)     = inn
+--data InjectedMachine stm1 mid stm2 out = Injected (stm2 out) (Maybe out) (TriState (stm1 mid) (stm2 out))  
+--instance ( MachineCombinator stm1
+--         , MachineCombinator stm2
+--         , Input stm2 ~ mid
+--         ) => MachineCombinator (InjectedMachine stm1 mid stm2) where
 
---         FilterSt st1 `merge` FilterSt st2          = FilterSt $ merge st1 st2 
+--         type Input (InjectedMachine stm1 mid stm2) = Input stm1
 
---         trigger inn (FilterMachine stm inF outF) (FilterSt st)
---                      | Just mid <- inF inn         = (outF=<<) *** (FilterSt<$>) $ trigger mid stm st 
---                      | otherwise                   = (Nothing, Just$FilterSt st)
+         --merge (Injected cte  st2)
+         --      (Injected cte' st2') = Injected (merge cte cte')  (mergeTriState st2 st2')  
 
-
-
-
-
---data FilterMachine stm mid inn out = FilterMachine (stm mid) (inn -> Maybe (Input stm)) (mid -> Maybe out)
-------------------------------------------------------------------------------------------
-
-
-------------------------------------------------------------------------------------------
-data InjectedMachine stm1 mid stm2 out = Injected (stm2 out) (TriState (stm1 mid) (stm2 out))  
-instance ( MachineCombinator stm1
-         , MachineCombinator stm2
-         , Input stm2 ~ mid
-         ) => MachineCombinator (InjectedMachine stm1 mid stm2) where
-
-         type Input (InjectedMachine stm1 mid stm2) = Input stm1
-
-         merge (Injected cte  st2)
-               (Injected cte' st2') = Injected (merge cte cte')  (mergeTriState st2 st2')  
-
-         collect (Injected _ st) = collect=<< (snd.fromTriState) st  
+         --collect (Injected _ st) = collect=<< (snd.fromTriState) st  
          
-         trigger inn (Injected cte st)   = let (st1 ,st2 ) = fromTriState st
-                                               st1'        = trigger inn=<<st1 
-                                               st2'        = case collect=<<st1' of
-                                                               Just x  -> trigger x =<< (merge cte <$> st2) 
-                                                               Nothing -> st2 
+         --trigger inn (Injected cte st)   = let (st1 ,st2 ) = fromTriState st
+         --                                      st1'        = trigger inn=<<st1 
+         --                                      st2'        = case collect=<<st1' of
+         --                                                      Just x  -> trigger x =<< (merge cte <$> st2) 
+         --                                                      Nothing -> st2 
 
-                                            in Injected cte <$> toTriState st1' st2' 
+         --                                   in Injected cte <$> toTriState st1' st2' 
                                                                  
 
-         debug       = const ["black blox"]
+  --       debug       = const ["black blox"]
 
-instance (Functor stm2 ) => Functor (InjectedMachine stm1 mid stm2) where
-  fmap f (Injected st st') = Injected (fmap f st) $ ( (id***fmap f)+++ id+++fmap f) st'
+--instance (Functor stm2 ) => Functor (InjectedMachine stm1 mid stm2) where
+  --fmap f (Injected st st') = Injected (fmap f st) $ ( (id***fmap f)+++ id+++fmap f) st'
 ------------------------------------------------------------------------------------------
 
 

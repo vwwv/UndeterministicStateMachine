@@ -72,13 +72,14 @@ prettyPrint (Entry i t0 t1 content) = unlines [ show i
 
 -- 3) c) Declarative defining a parser using out library :
 
-parser  = separatedBy newline
+parser  = enclosed (optional newline) (optional newline) 
+        $ separatedBy newline
         $ format <$> field                         <* newline
                  <*> field  <* separator <*> field <* newline
-                 <*> content                       <* newline
+                 <*> content                       
       where
-        separator             = some $ elementSuch (`elem`[' ','-','>'])
-        content               = some $ some (elementSuch (/='\n'))  <* element '\n'
+        separator             = some $ such (`elem`[' ','-','>'])
+        content               = some $ some (such (/='\n'))  <* element '\n'
         newline               = some $ element '\n'
 
         format i t0 t1 str    = Entry i t0 t1 (intercalate "\n" str) 
@@ -95,12 +96,12 @@ parser  = separatedBy newline
 
 arguments = let format _ a _ b _ c _ = (a,b,c) :: (String,DiffTime,String)  
              in format <$> optional space
-                       <*> some (elementSuch isAlphaNum) <*> space 
-                       <*> field                         <*> space 
-                       <*> some (elementSuch isAlphaNum) <*> optional space
+                       <*> some character <*> space 
+                       <*> field          <*> space 
+                       <*> some character <*> optional space
                         where 
-                            space = some$elementSuch isSpace
-
+                            space     = some$such isSpace
+                            character = such isAlphaNum <|> element '.' <|> element '-'
 
 main = do arg <-  parse arguments <$> readArgs
           case arg of
@@ -112,12 +113,23 @@ main = do arg <-  parse arguments <$> readArgs
                                               )
                                               (writeFile out.intercalate "\n".map prettyPrint.cropped time)  >> putStrLn "Done :-)"
 
-
+            x                   -> putStrLn =<< readArgs
             _                   -> putStrLn$unlines 
                                  [ "The argument syntax was incorrect or there was no argument\n"
                                  , "a correct example could be:\n"
-                                 , "\tcropper goodByLennin 03:55:19 goodByCutted" -- (**)
+                                 , "\t./cropper \"goodByLennin.srt 03:55:19.003 goodByCutted.srt\"" -- (**)
                                  ]
+
+
+
+test1 = parse arguments "sub2.srt 03:55:19.444 out.srt" 
+
+--test2 = parse parser $ unlines [ "1" 
+--                               , "00:00:45,280 --> 00:00:48,096"
+--                               , "Guck mal her. Hier in die Kamera."
+--                        --       , ""
+--                               ]
+
 
 
 
@@ -130,10 +142,20 @@ main = do arg <-  parse arguments <$> readArgs
 
 
 
+--instance DefinedStateMahine Char DiffTime where
+--  field = format <$> digit <*> (digit <* element ':')
+--                 <*> digit <*> (digit <* element ':')
+--                 <*> digit <*> (digit <* element ',')
+--                 <*> digit <*> digit <*> digit
+--   where
 
+--      format a b c d e f g h i  = let [h1, h0, m1, m0, s1, s0, p2, p1, p0] = fmap (\c->fromIntegral (ord c) - 48 )
+--                                                                             [a, b, c, d, e, f, g, h, i]
 
+--                                   in (secondsToDiffTime $ ((h1*10+h0)*60 + m1*10+m0)*60 + s1*10+s0)
+--                                      + (picosecondsToDiffTime $ (p2*100 + p1*10 + p0)*(10^9))
 
-
+--      digit                     = such isDigit
 
 
 
