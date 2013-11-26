@@ -28,14 +28,16 @@ import StateMachine
 import Internal.MachineComponent
 import Data.Char
 
-
+{-
+  TODO...
+-}
 
 
 
 {-
-  Laws:
+  To check laws:
 
-    As Functor:
+
 
     As Applicative:
 
@@ -111,14 +113,6 @@ import Data.Char
 
 
 
---parser = (:)<$> element 'x' <*> pure []
-
---parser = hola <$> enclosed spaces (separateBy (string "hola" <|> string "mundo" ) spaces) spaces 
-parser = string "hola" <|> string "mundo"
-  where
-    -- hola   = unlines -- undefined
-    -- spaces = some $ elementSuch isSpace
---string "hola"
 
 
 debuging::StateMachine Char String -> String -> String

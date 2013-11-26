@@ -12,7 +12,7 @@ import ReadArgs hiding (parse)
 
 {-
   Toy Example: 
-     Have you ever take a look to a subtitle file? They are written in a very human readible way, so you can easily
+     Have you ever take a look to a subtitle file? They are written in a very human readable way, so you can easily
      edit and modify them. So let say you are watching a movie and find out that because some reason, the first minutes
      of the film are cropped; your German is not good enough by its own so you need subtitles, but the movie player can
      only manage a subtitle delay of +/-30 seg, and it seems you'll need at least several minutes......when you check
@@ -22,7 +22,7 @@ import ReadArgs hiding (parse)
 -}
 
 -------------------------------------------------------------------------------------------------------------------------
--- 1)  Lets start definning the data we are dealing with...pretty complex XD
+-- 1)  Lets start defining the data we are dealing with...pretty complex XD
 
 data Entry = Entry { nSeq     :: Int         -- The sequence number....
                    , starts   :: DiffTime    -- Time when it starts with respect to the beginning of the movie
@@ -87,8 +87,8 @@ parser  = enclosed (optional newline) (optional newline)
 ------------------------------------------------------------------------------------------------------------------------
 -- 4) And now everything it's done! :) ....well non, we still need to define the program!!
 -- This program just read its input from console an execute it....as right today the proper
--- parsing function with error diagnostic (*) its not yet inplemented, in case of error, we
--- just apologise and exist...
+-- parsing function with error diagnostic (*) its not yet implemented, in case of error, we
+-- just apologize and exist...
 
 -- 4) a) Reading the arguments, we need again to define a parser...
 
@@ -113,7 +113,7 @@ main = do arg <-  parse arguments <$> readArgs
                                               )
                                               (writeFile out.intercalate "\n".map prettyPrint.cropped time)  >> putStrLn "Done :-)"
 
-            x                   -> putStrLn =<< readArgs
+
             _                   -> putStrLn$unlines 
                                  [ "The argument syntax was incorrect or there was no argument\n"
                                  , "a correct example could be:\n"
@@ -134,29 +134,8 @@ test1 = parse arguments "sub2.srt 03:55:19.444 out.srt"
 
 
  -- (*) as an example of that kind of function would be
- -- (**) We supossed the executable its called "cropper". 
+ -- (**) We supposed the executable its called "cropper". 
  -- recordingError::StateMachine a b -> (a -> err -> err) -> StateMachine (Either b err) b  
-
-
-
-
-
-
---instance DefinedStateMahine Char DiffTime where
---  field = format <$> digit <*> (digit <* element ':')
---                 <*> digit <*> (digit <* element ':')
---                 <*> digit <*> (digit <* element ',')
---                 <*> digit <*> digit <*> digit
---   where
-
---      format a b c d e f g h i  = let [h1, h0, m1, m0, s1, s0, p2, p1, p0] = fmap (\c->fromIntegral (ord c) - 48 )
---                                                                             [a, b, c, d, e, f, g, h, i]
-
---                                   in (secondsToDiffTime $ ((h1*10+h0)*60 + m1*10+m0)*60 + s1*10+s0)
---                                      + (picosecondsToDiffTime $ (p2*100 + p1*10 + p0)*(10^9))
-
---      digit                     = such isDigit
-
 
 
 

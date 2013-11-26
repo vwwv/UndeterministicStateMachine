@@ -31,11 +31,6 @@ import Prelude hiding ((.),id) -- we use those from Category...
 -- The class should be visible, but not the instances...
 
 
--- provisional laws:
------- trigger inn (st1 `merge` st2) == (trigger inn st1) `merge` (trigger inn st2) 
------- collect st1 <|> collect st2   == collect (st1 `merge` st2)
------- todo, faltan leyes...
-
 
 class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
@@ -49,7 +44,7 @@ class (Functor stm) => MachineCombinator (stm :: * -> * ) where
 
 -- Here there's a list of MachineCombinators, complete enough to define all the instances
 -- StateMachine needs. Originally it was define as a big GADT; but now It had been splitted
--- using data/type famillies, so one can extend them for particular prupose 
+-- using classes, so one can extend them for a particular prupose 
 -- such creating an specific more-eficient particular combination (ex: withLength x)....
 
 
@@ -184,7 +179,6 @@ instance (Functor stm1,Functor stm2) =>  Functor (SequencedMachine stm1 mid stm2
 -----------------------------------------------------------------------------------------
 
 
----- change names .... loop -> loopMachine
 
 ------------------------------------------------------------------------------------------
 data LoopMachine stm mid  output = Loop (stm mid) (stm ([mid]->output))
@@ -220,7 +214,21 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 
 ------------------------------------------------------------------------------------------
 
+{-
+  The idea is to be able to use the tokenization done by one machine to feed another machine
+  while preserving the undeterminism* . Once done this we can use it to define an category
+  and arrow instance which would satisfied the laws; we will be able to use it like this:
 
+    some anything >>> such (even.length)
+  
+  But to achive this we will have to change all the other instance (cause the stepMachine would
+  have to behave slightly different when used by the InjectedMachine).
+
+  [TODO]
+
+  * As long as we can aserve that two different AST produced with the same stream as 
+    input are equivalent
+-}
 ------------------------------------------------------------------------------------------
 --data InjectedMachine stm1 mid stm2 out = Injected (stm2 out) (Maybe out) (TriState (stm1 mid) (stm2 out))  
 --instance ( MachineCombinator stm1
@@ -259,10 +267,9 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
---TODO: recheck all the information remains at the bottom...
+
 --TODO: refactor the common code...
 -- TODO: let it full of comments!!
--- TODO: cache or not cache?
 
 type TriState a b = Either (a,b) (Either a b) 
 
@@ -295,11 +302,6 @@ a <||> b     = (merge<$>a<*>b)<|>a<|>b
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
--- TODO : no to the "merge" optimization
 
 
 

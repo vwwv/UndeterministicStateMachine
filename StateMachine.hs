@@ -34,6 +34,14 @@ import Data.Maybe
 -}
 
 
+{-
+  Some of the implementations has been postpone till the InjectedMachine [See Internal]
+  is defined.
+
+  [This is still under construction :-) ]
+
+-}
+
 -- Represent an StateMachine  in a set of concurrent states of execution.
 -- it is feeded with value of type "input" and out values of type" output" when success.
 data StateMachine input output where
@@ -63,26 +71,11 @@ instance Alternative (StateMachine input) where
   many v                     = some v <|> pure [] -- I'm wondering why I do need this...
 
 -- TODO:  check the laws!! 
+
+
 --instance Category    StateMachine         where
---  id              = anything
-
---  Wrap f . Wrap g = let  x  = collect g
---                         f' = fromMaybe f (flip trigger f =<< x)
---                         y  = collect f'
-
---                     in Wrap$Injected f y (Left (g,f'))
-
 --instance Arrow       StateMachine         where
---   arr f     = Wrap$Step True Nothing (Just . f)
---   first stm = (,) <$> (contraMap fst stm) <*> (arr snd ) 
-
 --instance ArrowChoice StateMachine         where
---   left stm = (   contraMap (either undefined (const Nothing)) (with id) >>> fmap Left stm 
---              ) 
---              <|> 
---              (   contraMap (either (const Nothing) id) (with id)) 
--- check if it does works...
--- take out the contraMap above...
 
 --contraMap::(a->b) -> StateMachine b c -> StateMachine a c 
 --contraMap = undefined 
@@ -111,8 +104,8 @@ string stream =  foldr (\a b -> (:) <$> a <*> b) (pure []) (map element stream)
 parse::StateMachine a b -> [a] -> Maybe b
 parse (Wrap stm) = (collect =<<) . foldr ((=<<).trigger) (Just stm).reverse
 
---tokenize::[StateMachine a b] -> [a] -> ([b],[a])
---tokenize = undefined
+--tokenized::[StateMachine a b] -> [a] -> ([b],[a])
+--tokenized = undefined
 
 ------------------------------------------------------------------------------------------------
 ---- TODO: this functions will rely on the Arrowed combinators not defined yet....
@@ -146,11 +139,15 @@ parseText = undefined
 --------------------------------------------------------------------------------------------------------
 -----TODO: add more instances...
 
---TODO, add Standards types, lists, maybes, etc...
+--TODO, add Standards types, lists, int, bool ,etc...
 
-------------- Usefull 
+------------- Useful 
 class DefinedStateMahine inn out where
   field::StateMachine inn out
+
+instance(DefinedStateMahine Char out)=> DefinedStateMahine Char (Maybe out) where
+  field = optional field 
+
 
 instance DefinedStateMahine Char Int where
   field = foldl (\acc c-> (ord c - 48) + 10*acc) 0
@@ -161,10 +158,10 @@ instance DefinedStateMahine Char () where
   field = () <$ some (such isSpace)
 
 
---Time can be tedious for parsing...related instances can be quiet usefull....
+--Time can be tedious for parsing...related instances can be quiet useful....
 --
---Okey, true, this one is just for the example...but one extended to more general
--- formats it could be awesome....
+-- Okey, true, this one is just for the example...but once extended to  a more general
+-- format it could be used somewhere else....
 instance DefinedStateMahine Char DiffTime where
   field = format <$> digit <*> (digit <* element' ':')
                  <*> digit <*> (digit <* element' ':')
