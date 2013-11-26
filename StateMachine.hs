@@ -1,16 +1,8 @@
 {-# LANGUAGE GADTs 
-           , DataKinds
-           , TypeOperators
-           , TypeSynonymInstances
-           , KindSignatures
-           , StandaloneDeriving
            , FlexibleInstances
-           , ScopedTypeVariables
            , TypeFamilies
            , FlexibleContexts
-           , EmptyDataDecls
            , DeriveFunctor
-           , PolyKinds
            , MultiParamTypeClasses
            #-}
 
