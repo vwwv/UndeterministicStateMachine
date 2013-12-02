@@ -208,56 +208,78 @@ instance (Functor stm) => Functor (LoopMachine stm mid) where
 ------------------------------------------------------------------------------------------
 
 {-
-  The idea is to be able to use the tokenization done by one machine to feed another machine
-  while preserving the undeterminism* . Once done this we can use it to define an category
-  and arrow instance which would satisfied the laws; we will be able to use it like this:
-
-    some anything >>> such (even.length)
-  
-  But to achive this we will have to change all the other instance (cause the stepMachine would
-  have to behave slightly different when used by the InjectedMachine).
-
-  [TODO]
-
-  * As long as we can aserve that two different AST produced with the same stream as 
-    input are equivalent
+ TODO documment...
 -}
-------------------------------------------------------------------------------------------
---data InjectedMachine stm1 mid stm2 out = Injected (stm2 out) (Maybe out) (TriState (stm1 mid) (stm2 out))  
---instance ( MachineCombinator stm1
---         , MachineCombinator stm2
---         , Input stm2 ~ mid
---         ) => MachineCombinator (InjectedMachine stm1 mid stm2) where
+----------------------------------------------------------------------------------------------
+data InjectedMachine stm1 mid stm2 out = Injected (stm1 mid) (Maybe out) (stm1 (stm2 out,mid))
+----------------------------------------------------------------------------------------------
+instance ( MachineCombinator stm1
+         , MachineCombinator stm2
+         ) => MachineCombinator (InjectedMachine stm1 mid stm2) where 
 
---         type Input (InjectedMachine stm1 mid stm2) = Input stm1
+         type Input (InjectedMachine stm1 mid stm2)     = Input stm1
 
-         --merge (Injected cte  st2)
-         --      (Injected cte' st2') = Injected (merge cte cte')  (mergeTriState st2 st2')  
+         trigger inn (Injected cte out stm) = undefined
 
-         --collect (Injected _ st) = collect=<< (snd.fromTriState) st  
-         
-         --trigger inn (Injected cte st)   = let (st1 ,st2 ) = fromTriState st
-         --                                      st1'        = trigger inn=<<st1 
-         --                                      st2'        = case collect=<<st1' of
-         --                                                      Just x  -> trigger x =<< (merge cte <$> st2) 
-         --                                                      Nothing -> st2 
+         collect (Injected cte out stm)     =   undefined
 
-         --                                   in Injected cte <$> toTriState st1' st2' 
-                                                                 
+         merge  (Injected cte out stm)
+                (Injected cte' out' stm')      = undefined
 
-  --       debug       = const ["black blox"]
+         debug (Injected cte out stm)       = undefined
 
---instance (Functor stm2 ) => Functor (InjectedMachine stm1 mid stm2) where
-  --fmap f (Injected st st') = Injected (fmap f st) $ ( (id***fmap f)+++ id+++fmap f) st'
-------------------------------------------------------------------------------------------
-
-
+instance (Functor stm1,Functor stm2) => Functor (InjectedMachine stm1 mid stm2) where
+  fmap f (Injected cte out stm) = undefined
 
 -------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
+-- TODO only used to define first, so we can check if it is working properly....
+data SimultaneousMachine stm1 mid1 stm2 mid2 out = Simultaneous (stm1 mid1) (stm2 mid2) (mid1->mid2->out)
 
 
+instance ( MachineCombinator stm1
+         , MachineCombinator stm2
+         , Input stm1 ~ Input stm2
+         ) => MachineCombinator (SimultaneousMachine stm1 mid1 stm2 mid2) where 
 
+         type Input (SimultaneousMachine stm1 mid1 stm2 mid2)     = Input stm1
+
+         trigger inn (Simultaneous stm1 stm2 f) = undefined
+
+         collect (Simultaneous stm1 stm2 f)     =   undefined
+
+         merge  (Simultaneous stm1  stm2  f )
+                (Simultaneous stm1' stm2' f')      = undefined
+
+         debug (Simultaneous stm1 stm2 f)       = undefined
+
+instance (Functor stm1,Functor stm2) => Functor (SimultaneousMachine stm1 mid1 stm2 mid2) where
+  fmap f (Simultaneous stm1 stm2 g) = undefined
+
+-------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------
+-- TODO only used to define first, so we can check if it is working properly....
+data ForkedMachine stm1 mid1 stm2 mid2 out = Forked (stm1 mid1) (stm2 mid2) (mid1->mid2->out)
+
+
+instance ( MachineCombinator stm1
+         , MachineCombinator stm2
+         , Input stm1 ~ Input stm2
+         ) => MachineCombinator (ForkedMachine stm1 mid1 stm2 mid2) where 
+
+         type Input (ForkedMachine stm1 mid1 stm2 mid2)     = Input stm1
+
+         trigger inn (Forked stm1 stm2 f) = undefined
+
+         collect (Forked stm1 stm2 f)     =   undefined
+
+         merge  (Forked stm1  stm2  f )
+                (Forked stm1' stm2' f')      = undefined
+
+         debug (Forked stm1 stm2 f)       = undefined
+
+instance (Functor stm1,Functor stm2) => Functor (ForkedMachine stm1 mid1 stm2 mid2) where
+  fmap f (Forked stm1 stm2 g) = undefined
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
 
