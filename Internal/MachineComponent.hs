@@ -215,18 +215,26 @@ data InjectedMachine stm1 mid stm2 out = Injected (stm1 mid) (Maybe out) (stm1 (
 ----------------------------------------------------------------------------------------------
 instance ( MachineCombinator stm1
          , MachineCombinator stm2
+         , Input stm2 ~ mid 
          ) => MachineCombinator (InjectedMachine stm1 mid stm2) where 
 
          type Input (InjectedMachine stm1 mid stm2)     = Input stm1
 
-         trigger inn (Injected cte out stm) = undefined
+         trigger inn (Injected cte out stm) = do stm' <- trigger inn stm
+                                                 case collect stm' of
+                                                     Just (st,x) 
+                                                      | Just st'  <- trigger x st -> Just $ Injected cte (collect st') 
+                                                                                          $ merge ((,) st' <$> cte) stm'
 
-         collect (Injected cte out stm)     =   undefined
+                                                      | otherwise                 -> Just $ Injected cte Nothing stm' 
+             --TODO:recheck...
+
+         collect (Injected cte out stm)     =   out
 
          merge  (Injected cte out stm)
-                (Injected cte' out' stm')      = undefined
+                (Injected cte' out' stm')   = Injected (merge cte cte') (out<|>out') (merge stm stm')
 
-         debug (Injected cte out stm)       = undefined
+         debug (Injected cte out stm)       = ["black box..."]
 
 instance (Functor stm1,Functor stm2) => Functor (InjectedMachine stm1 mid stm2) where
   fmap f (Injected cte out stm) = undefined
@@ -234,52 +242,32 @@ instance (Functor stm1,Functor stm2) => Functor (InjectedMachine stm1 mid stm2) 
 -------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
 -- TODO only used to define first, so we can check if it is working properly....
-data SimultaneousMachine stm1 mid1 stm2 mid2 out = Simultaneous (stm1 mid1) (stm2 mid2) (mid1->mid2->out)
+data SimultaneousMachine stm1 stm2 mid out = Simultaneous (stm1 (mid->out)) (stm2 mid)
 
 
 instance ( MachineCombinator stm1
          , MachineCombinator stm2
          , Input stm1 ~ Input stm2
-         ) => MachineCombinator (SimultaneousMachine stm1 mid1 stm2 mid2) where 
+         ) => MachineCombinator (SimultaneousMachine stm1 stm2 mid) where 
 
-         type Input (SimultaneousMachine stm1 mid1 stm2 mid2)     = Input stm1
+         type Input (SimultaneousMachine stm1 stm2 mid)     = Input stm1
 
-         trigger inn (Simultaneous stm1 stm2 f) = undefined
+         trigger inn (Simultaneous stm1 stm2 )              = do st1 <- trigger inn stm1
+                                                                 st2 <- trigger inn stm2
+                                                                 Just$Simultaneous st1 st2
 
-         collect (Simultaneous stm1 stm2 f)     =   undefined
+         collect (Simultaneous stm1 stm2 )                  = do f <- collect stm1
+                                                                 x <- collect stm2
+                                                                 Just (f x)
+         merge  (Simultaneous stm1  stm2  )
+                (Simultaneous stm1' stm2' )                 = Simultaneous (merge stm1 stm1') (merge stm2 stm2')
 
-         merge  (Simultaneous stm1  stm2  f )
-                (Simultaneous stm1' stm2' f')      = undefined
+         debug (Simultaneous stm1 stm2 )                    = ["black box..."]
 
-         debug (Simultaneous stm1 stm2 f)       = undefined
-
-instance (Functor stm1,Functor stm2) => Functor (SimultaneousMachine stm1 mid1 stm2 mid2) where
-  fmap f (Simultaneous stm1 stm2 g) = undefined
-
--------------------------------------------------------------------------------------------
--------------------------------------------------------------------------------------------
--- TODO only used to define first, so we can check if it is working properly....
-data ForkedMachine stm1 mid1 stm2 mid2 out = Forked (stm1 mid1) (stm2 mid2) (mid1->mid2->out)
+instance (Functor stm1,Functor stm2) => Functor (SimultaneousMachine stm1 stm2 mid) where
+  fmap f (Simultaneous stm1 stm2) = undefined
 
 
-instance ( MachineCombinator stm1
-         , MachineCombinator stm2
-         , Input stm1 ~ Input stm2
-         ) => MachineCombinator (ForkedMachine stm1 mid1 stm2 mid2) where 
-
-         type Input (ForkedMachine stm1 mid1 stm2 mid2)     = Input stm1
-
-         trigger inn (Forked stm1 stm2 f) = undefined
-
-         collect (Forked stm1 stm2 f)     =   undefined
-
-         merge  (Forked stm1  stm2  f )
-                (Forked stm1' stm2' f')      = undefined
-
-         debug (Forked stm1 stm2 f)       = undefined
-
-instance (Functor stm1,Functor stm2) => Functor (ForkedMachine stm1 mid1 stm2 mid2) where
-  fmap f (Forked stm1 stm2 g) = undefined
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
 
