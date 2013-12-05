@@ -237,7 +237,9 @@ instance ( MachineCombinator stm1
          debug (Injected cte out stm)       = ["black box..."]
 
 instance (Functor stm1,Functor stm2) => Functor (InjectedMachine stm1 mid stm2) where
-  fmap f (Injected cte out stm) = undefined
+  fmap f (Injected cte out stm) = Injected cte (f<$>out) ( (fmap f *** id )<$> stm )
+
+-- TODO: check all the functor instances....
 
 -------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------
@@ -265,11 +267,32 @@ instance ( MachineCombinator stm1
          debug (Simultaneous stm1 stm2 )                    = ["black box..."]
 
 instance (Functor stm1,Functor stm2) => Functor (SimultaneousMachine stm1 stm2 mid) where
-  fmap f (Simultaneous stm1 stm2) = undefined
+  fmap f (Simultaneous stm1 stm2) = Simultaneous (fmap f <$>stm1) stm2 
 
 
 ------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
+data ForkMachine stm1 stm2 out = Fork (TriState (stm1 out) (stm2 out))
+
+
+instance ( MachineCombinator stm1
+         , MachineCombinator stm2
+         ) => MachineCombinator (ForkMachine stm1 stm2) where 
+
+         type Input (ForkMachine stm1 stm2)  = Either (Input stm1) (Input stm2)
+
+         trigger inn (Fork st)               = undefined
+
+         collect (Fork st )                  = uncurry (<|>) . ((collect=<<) *** (collect=<<)) . fromTriState $ st 
+
+
+         merge  (Fork st  )
+                (Fork st' )                  =  Fork $ mergeTriState st st'
+
+         debug (Fork st )                    = ["black box..."]
+
+instance (Functor stm1,Functor stm2) => Functor (ForkMachine stm1 stm2) where
+  fmap f (Fork st) = Fork $ (fmap f *** fmap f) +++ fmap f +++ fmap f $ st
 
 --TODO: refactor the common code...
 -- TODO: let it full of comments!!
